@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alumni Data Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div>
+      <h1>🎓 Alumni Data Manager</h1>
+      <div class="subtitle">Kelola JSONL, Manifest & Metadata</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="app.exportJSONL()">⬇ JSONL</button>
+      <button class="btn btn-outline" onclick="app.exportCSV()">⬇ CSV</button>
+      <button class="btn btn-warning" onclick="app.splitByYear()">✂ Split</button>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="num" id="statTotal">0</div><div class="label">Total Records</div></div>
+    <div class="stat-card"><div class="num" id="statYears">0</div><div class="label">Angkatan</div></div>
+    <div class="stat-card"><div class="num" id="statSupervisors">0</div><div class="label">Pembimbing</div></div>
+  </div>
+  <div id="yearBreakdown" style="margin-bottom:1rem;font-size:.8rem"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="data">📊 Data</button>
+    <button class="tab" data-tab="import">📥 Import</button>
+    <button class="tab" data-tab="add">➕ Tambah</button>
+    <button class="tab" data-tab="manifest">📋 Manifest</button>
+    <button class="tab" data-tab="metadata">📑 Metadata</button>
+    <button class="tab" data-tab="template">📄 Template</button>
+  </div>
+
+  <!-- ═══ Panel: Data ═══ -->
+  <div class="panel active" id="panel-data">
+    <div class="card">
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
+        <input type="text" id="searchBox" placeholder="🔍 Cari nama, NPM, tesis, pembimbing…" style="flex:1;min-width:200px" oninput="app.filterTable()">
+        <span id="rowCount" style="font-size:.8rem;color:var(--text-muted)">0 records</span>
+      </div>
+      <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.5rem">
+        Sort: 
+        <a href="#" onclick="app.sortRecords('graduationYear');return false" style="color:var(--primary)">Tahun</a> · 
+        <a href="#" onclick="app.sortRecords('name');return false" style="color:var(--primary)">Nama</a> · 
+        <a href="#" onclick="app.sortRecords('npm');return false" style="color:var(--primary)">NPM</a>
+        &nbsp;|&nbsp; Drag baris untuk reorder
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tahun</th><th>Nama</th><th>NPM</th><th>Thesis</th><th>Pembimbing</th><th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="dataBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Panel: Import ═══ -->
+  <div class="panel" id="panel-import">
+    <div class="card">
+      <h2>📂 Import File</h2>
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">📁</div>
+        <div>Drag & drop file <strong>.jsonl</strong> atau <strong>.csv</strong> di sini</div>
+        <div style="font-size:.75rem;margin-top:.35rem">atau klik untuk pilih file</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>📊 Import dari Google Sheets</h2>
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
+        Paste URL Google Sheets. Pastikan sheet di-share <strong>"Anyone with the link"</strong>.
+      </p>
+      <div class="form-row">
+        <div class="form-group" style="flex:3">
+          <input type="url" id="gsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/XXXXXXX/edit#gid=0">
+        </div>
+        <div style="flex:0 0 auto;display:flex;align-items:flex-end">
+          <button class="btn btn-primary" onclick="app.importGSheet()">📥 Import</button>
+        </div>
+      </div>
+      <h3>Mapping kolom otomatis</h3>
+      <p style="font-size:.78rem;color:var(--text-muted)">
+        <code>nama→name</code>, <code>NPM→npm</code>, <code>tahun/angkatan→graduationYear</code>, 
+        <code>judul/tesis→thesis</code>, <code>pembimbing→supervisors</code>. Pisah dengan <code>;</code>
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══ Panel: Tambah ═══ -->
+  <div class="panel" id="panel-add">
+    <div class="card">
+      <h2>➕ Tambah Record Baru</h2>
+      <div class="form-row">
+        <div class="form-group"><label>ID</label><input type="text" id="addId" placeholder="Auto jika kosong"></div>
+        <div class="form-group"><label>Nama</label><input type="text" id="addName" placeholder="Nama lengkap"></div>
+        <div class="form-group"><label>NPM</label><input type="text" id="addNpm" placeholder="Nomor Pokok Mahasiswa"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Tahun Lulus</label><input type="number" id="addYear" placeholder="2024" min="2000" max="2030"></div>
+        <div class="form-group" style="flex:2"><label>Pembimbing</label><input type="text" id="addSupervisors" placeholder="Dr. A; Dr. B (pisah dengan ;)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Judul Tesis</label><textarea id="addThesis" rows="2" placeholder="Judul tesis lengkap"></textarea></div>
+      </div>
+      <button class="btn btn-success" onclick="app.addRecord()">➕ Tambah ke Data</button>
+    </div>
+  </div>
+
+  <!-- ═══ Panel: Manifest ═══ -->
+  <div class="panel" id="panel-manifest">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+        <h2 style="margin:0">📋 Edit manifest.json</h2>
+        <div class="btn-group">
+          <button class="btn btn-outline" onclick="app.loadManifestFile()">📂 Load</button>
+          <button class="btn btn-success" onclick="app.saveManifest()">💾 Download</button>
+          <button class="btn btn-primary" onclick="app.autoGenerateManifest()">🔄 Auto-generate dari Data</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Total Alumni</label>
+          <input type="number" id="mfTotal" value="0">
+        </div>
+        <div class="form-group">
+          <label>Last Updated</label>
+          <input type="date" id="mfLastUpdated">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tahun (pisah koma)</label>
+          <input type="text" id="mfYears" placeholder="2012, 2013, 2014, ...">
+        </div>
+      </div>
+
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">
+        Jumlah per Tahun (JSON)
+      </label>
+      <textarea id="mfCounts" rows="5" placeholder='{"2012":23,"2013":37,...}'></textarea>
+      
+      <p style="font-size:.78rem;color:var(--text-muted);margin-top:.5rem">
+        💡 Klik <strong>Auto-generate</strong> untuk hitung ulang dari data JSONL yang sedang dimuat.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Raw JSON</h2>
+      <textarea id="mfRaw" rows="12" style="font-family:monospace;font-size:.8rem" placeholder="Load manifest.json atau klik Auto-generate"></textarea>
+    </div>
+  </div>
+
+  <!-- ═══ Panel: Metadata ═══ -->
+  <div class="panel" id="panel-metadata">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+        <h2 style="margin:0">📑 Edit alumni-metadata.json</h2>
+        <div class="btn-group">
+          <button class="btn btn-outline" onclick="app.loadMetaFile()">📂 Load</button>
+          <button class="btn btn-success" onclick="app.saveMetadata()">💾 Download</button>
+          <button class="btn btn-primary" onclick="app.autoGenerateMetadata()">🔄 Auto-generate dari Data</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Total Alumni</label>
+          <input type="number" id="mdTotal" value="0">
+        </div>
+        <div class="form-group">
+          <label>Last Updated</label>
+          <input type="date" id="mdLastUpdated">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tahun Angkatan (pisah koma)</label>
+          <input type="text" id="mdYears" placeholder="2012, 2013, 2014, ...">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cleaned By</label>
+          <input type="text" id="mdCleanedBy" placeholder="Nama / tim">
+        </div>
+        <div class="form-group">
+          <label>Cleaning Date</label>
+          <input type="date" id="mdCleaningDate">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="mdDescription" placeholder="Data alumni Magister Teknik Elektro USK">
+        </div>
+      </div>
+
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">
+        Issues Fixed (satu per baris)
+      </label>
+      <textarea id="mdIssues" rows="4" placeholder="Removed leading single quotes from NPM&#10;Cleaned supervisor numbering&#10;..."></textarea>
+
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.5rem;margin-top:.75rem">
+        Daftar Pembimbing (<span id="mdSupCount">0</span>)
+      </label>
+      <div id="mdSupervisors" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem"></div>
+      <div class="form-row" style="margin-top:.5rem">
+        <div class="form-group" style="flex:3">
+          <input type="text" id="mdNewSup" placeholder="Tambah pembimbing baru...">
+        </div>
+        <div style="flex:0 0 auto;display:flex;align-items:flex-end">
+          <button class="btn btn-sm btn-success" onclick="app.addSupervisor()">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Raw JSON</h2>
+      <textarea id="mdRaw" rows="12" style="font-family:monospace;font-size:.8rem" placeholder="Load metadata atau klik Auto-generate"></textarea>
+    </div>
+  </div>
+
+  <!-- ═══ Panel: Template ═══ -->
+  <div class="panel" id="panel-template">
+    <div class="card">
+      <h2>📄 Buat Template JSONL</h2>
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
+        Buat file JSONL kosong dengan struktur field yang diinginkan.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Fields (pisah koma)</label>
+          <input type="text" id="templateFields" value="id,name,npm,graduationYear,thesis,supervisors">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="app.createTemplate()">📄 Buat Template</button>
+    </div>
+
+    <div class="card">
+      <h2>ℹ️ Format Data</h2>
+      <pre style="background:#f8fafc;padding:.75rem;border-radius:8px;font-size:.78rem;overflow-x:auto">{
+  "id": "1209200200012",
+  "name": "Edi Sukriansyah",
+  "npm": "1209200200012",
+  "graduationYear": 2012,
+  "thesis": "Penerapan Metode ...",
+  "supervisors": ["Dr. A", "Dr. B"],
+  "searchText": "... (auto-generated)"
+}</pre>
+    </div>
+  </div>
+
+  <footer>&copy; SYAH &middot; Alumni Data Manager &middot; <a href="https://mte.usk.ac.id" target="_blank" style="color:var(--primary)">MTE USK</a></footer>
+</div>
+
+<div class="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
