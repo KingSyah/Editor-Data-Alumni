@@ -17,12 +17,12 @@
   <header>
     <div>
       <h1>🎓 Alumni Data Manager</h1>
-      <div class="subtitle">Kelola JSONL, Manifest & Metadata</div>
+      <div class="subtitle">Kelola JSONL & Metadata — Satu file config, simpel</div>
     </div>
     <div class="btn-group">
       <button class="btn btn-primary" onclick="app.exportJSONL()">⬇ JSONL</button>
       <button class="btn btn-outline" onclick="app.exportCSV()">⬇ CSV</button>
-      <button class="btn btn-warning" onclick="app.splitByYear()">✂ Split</button>
+      <button class="btn btn-warning" onclick="app.splitByYear()">✂ Split + Metadata</button>
     </div>
   </header>
 
@@ -31,6 +31,7 @@
     <div class="stat-card"><div class="num" id="statTotal">0</div><div class="label">Total Records</div></div>
     <div class="stat-card"><div class="num" id="statYears">0</div><div class="label">Angkatan</div></div>
     <div class="stat-card"><div class="num" id="statSupervisors">0</div><div class="label">Pembimbing</div></div>
+    <div class="stat-card"><div class="num" id="statNewest">—</div><div class="label">Tahun Terbaru</div></div>
   </div>
   <div id="yearBreakdown" style="margin-bottom:1rem;font-size:.8rem"></div>
 
@@ -38,8 +39,8 @@
   <div class="tabs">
     <button class="tab active" data-tab="data">📊 Data</button>
     <button class="tab" data-tab="add">➕ Tambah</button>
+    <button class="tab" data-tab="newyear">🆕 Tahun Baru</button>
     <button class="tab" data-tab="config">⚙️ Config</button>
-    <button class="tab" data-tab="template">📄 Template</button>
   </div>
 
   <!-- ═══ Panel: Data (includes Import) ═══ -->
@@ -57,6 +58,7 @@
             <div class="drop-zone" id="dropZone" style="padding:1rem">
               <div class="icon" style="font-size:1.5rem;margin-bottom:.25rem">📁</div>
               <div style="font-size:.82rem">Drag & drop <strong>.jsonl</strong> / <strong>.csv</strong> atau klik</div>
+              <div style="font-size:.7rem;margin-top:.25rem;color:var(--text-muted)">Bisa drop beberapa file sekaligus (multi-year)</div>
             </div>
           </div>
           <div style="flex:1;min-width:200px">
@@ -77,6 +79,9 @@
     <div class="card">
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
         <input type="text" id="searchBox" placeholder="🔍 Cari nama, NPM, tesis, pembimbing…" style="flex:1;min-width:200px" oninput="app.filterTable()">
+        <select id="filterYear" style="min-width:130px" onchange="app.filterTable()">
+          <option value="">Semua Tahun</option>
+        </select>
         <span id="rowCount" style="font-size:.8rem;color:var(--text-muted)">0 records</span>
       </div>
       <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.5rem">
@@ -103,6 +108,9 @@
   <div class="panel" id="panel-add">
     <div class="card">
       <h2>➕ Tambah Record Baru</h2>
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
+        Tambah satu per satu. Data otomatis masuk ke tabel di tab Data.
+      </p>
       <div class="form-row">
         <div class="form-group"><label>ID</label><input type="text" id="addId" placeholder="Auto jika kosong"></div>
         <div class="form-group"><label>Nama</label><input type="text" id="addName" placeholder="Nama lengkap"></div>
@@ -119,141 +127,190 @@
     </div>
   </div>
 
-  <!-- ═══ Panel: Config (Manifest + Metadata) ═══ -->
-  <div class="panel" id="panel-config">
+  <!-- ═══ Panel: Tahun Baru (Wizard) ═══ -->
+  <div class="panel" id="panel-newyear">
+    <div class="card" style="border-left:4px solid var(--success)">
+      <h2>🆕 Tambah Tahun Angkatan Baru</h2>
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
+        Cara termudah untuk menambah data angkatan baru (misal 2024, 2025, dst). 
+        Tidak perlu clean data satu-satu — import langsung jadi.
+      </p>
 
-    <!-- Shared drop zone -->
-    <div class="card">
-      <h2>📂 Load Config File</h2>
-      <div class="drop-zone" id="configDropZone">
-        <div class="icon">📁</div>
-        <div>Drag & drop <strong>manifest.json</strong> atau <strong>alumni-metadata.json</strong></div>
-        <div style="font-size:.75rem;margin-top:.35rem">Auto-detect berdasarkan nama file & isi</div>
+      <!-- Step 1: Pilih tahun -->
+      <div class="wizard-step">
+        <div class="step-num">1</div>
+        <div style="flex:1">
+          <h3 style="margin-bottom:.5rem">Tentukan Tahun</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tahun Angkatan</label>
+              <input type="number" id="newYearInput" placeholder="2024" min="2000" max="2030">
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end">
+              <button class="btn btn-primary" onclick="app.wizardSetYear()">Lanjut →</button>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Manifest Section -->
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('manifestBody').style.display=document.getElementById('manifestBody').style.display==='none'?'block':'none';this.querySelector('.mf-toggle').textContent=document.getElementById('manifestBody').style.display==='none'?'▸':'▾'">
-        <h2 style="margin:0">📋 manifest.json</h2>
-        <div style="display:flex;align-items:center;gap:.5rem">
-          <div class="btn-group">
-            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();app.autoGenerateManifest()">🔄 Auto-generate</button>
-            <button class="btn btn-sm btn-success" onclick="event.stopPropagation();app.saveManifest()">💾 Download</button>
-          </div>
-          <span class="mf-toggle" style="font-size:1.2rem;color:var(--text-muted)">▾</span>
-        </div>
-      </div>
-      <div id="manifestBody">
-        <div class="form-row" style="margin-top:.75rem">
-          <div class="form-group">
-            <label>Total Alumni</label>
-            <input type="number" id="mfTotal" value="0">
-          </div>
-          <div class="form-group">
-            <label>Last Updated</label>
-            <input type="date" id="mfLastUpdated">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Tahun (pisah koma)</label>
-            <input type="text" id="mfYears" placeholder="2012, 2013, 2014, ...">
-          </div>
-        </div>
-        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">Jumlah per Tahun (JSON)</label>
-        <textarea id="mfCounts" rows="4" placeholder='{"2012":23,"2013":37,...}'></textarea>
-      </div>
-    </div>
+      <!-- Step 2: Import data -->
+      <div class="wizard-step" id="wizardStep2" style="opacity:.4;pointer-events:none">
+        <div class="step-num">2</div>
+        <div style="flex:1">
+          <h3 style="margin-bottom:.5rem">Import Data <span id="wizardYearLabel" class="badge"></span></h3>
+          <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">
+            Pilih salah satu cara. Data akan otomatis dibersihkan (trim, fix NPM, generate searchText).
+          </p>
 
-    <!-- Metadata Section -->
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('metaBody').style.display=document.getElementById('metaBody').style.display==='none'?'block':'none';this.querySelector('.md-toggle').textContent=document.getElementById('metaBody').style.display==='none'?'▸':'▾'">
-        <h2 style="margin:0">📑 alumni-metadata.json</h2>
-        <div style="display:flex;align-items:center;gap:.5rem">
-          <div class="btn-group">
-            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();app.autoGenerateMetadata()">🔄 Auto-generate</button>
-            <button class="btn btn-sm btn-success" onclick="event.stopPropagation();app.saveMetadata()">💾 Download</button>
+          <div class="form-row">
+            <!-- Drop file -->
+            <div style="flex:1;min-width:200px">
+              <div class="drop-zone" id="newYearDrop" style="padding:1.25rem">
+                <div class="icon" style="font-size:1.5rem">📄</div>
+                <div style="font-size:.82rem"><strong>Drop .jsonl / .csv</strong></div>
+                <div style="font-size:.7rem;color:var(--text-muted)">atau klik untuk pilih file</div>
+              </div>
+            </div>
+
+            <!-- Paste text -->
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">atau Paste JSONL / JSON Array</label>
+              <textarea id="newYearPaste" rows="5" placeholder='Satu baris per record JSON, atau JSON array:&#10;{"name":"Budi","npm":"123",...}&#10;{"name":"Ani","npm":"456",...}'></textarea>
+              <button class="btn btn-sm btn-primary" style="margin-top:.35rem" onclick="app.wizardParsePaste()">Parse Paste</button>
+            </div>
           </div>
-          <span class="md-toggle" style="font-size:1.2rem;color:var(--text-muted)">▾</span>
+
+          <!-- Google Sheets -->
+          <div class="form-row" style="margin-top:.5rem">
+            <div class="form-group" style="flex:3">
+              <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">atau dari Google Sheets</label>
+              <div style="display:flex;gap:.35rem">
+                <input type="url" id="newYearGSheet" placeholder="Paste URL Google Sheets..." style="flex:1">
+                <button class="btn btn-sm btn-primary" onclick="app.wizardImportGSheet()">📥 Import</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Template shortcut -->
+          <div style="margin-top:.75rem;padding:.75rem;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0">
+            <div style="font-size:.82rem;font-weight:600;color:#166534;margin-bottom:.35rem">💡 Atau mulai dari template kosong:</div>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+              <button class="btn btn-sm btn-outline" onclick="app.wizardTemplate(5)">5 baris kosong</button>
+              <button class="btn btn-sm btn-outline" onclick="app.wizardTemplate(10)">10 baris kosong</button>
+              <button class="btn btn-sm btn-outline" onclick="app.wizardTemplate(20)">20 baris kosong</button>
+              <button class="btn btn-sm btn-outline" onclick="app.wizardTemplate(30)">30 baris kosong</button>
+            </div>
+            <div style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">Template siap diisi — langsung edit di tabel, tidak perlu format apapun</div>
+          </div>
         </div>
       </div>
-      <div id="metaBody">
-        <div class="form-row" style="margin-top:.75rem">
-          <div class="form-group">
-            <label>Total Alumni</label>
-            <input type="number" id="mdTotal" value="0">
+
+      <!-- Step 3: Review & Clean -->
+      <div class="wizard-step" id="wizardStep3" style="opacity:.4;pointer-events:none">
+        <div class="step-num">3</div>
+        <div style="flex:1">
+          <h3 style="margin-bottom:.5rem">Review & Auto-Clean</h3>
+          <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem">
+            Data siap di-<strong>merge</strong> ke data utama. Klik tombol di bawah, lalu cek di tab <strong>Data</strong>.
+          </p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-success" onclick="app.wizardMerge()">✅ Merge ke Data Utama</button>
+            <span id="wizardCount" style="font-size:.82rem;color:var(--text-muted)"></span>
           </div>
-          <div class="form-group">
-            <label>Last Updated</label>
-            <input type="date" id="mdLastUpdated">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Tahun Angkatan (pisah koma)</label>
-            <input type="text" id="mdYears" placeholder="2012, 2013, 2014, ...">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Cleaned By</label>
-            <input type="text" id="mdCleanedBy" placeholder="Nama / tim">
-          </div>
-          <div class="form-group">
-            <label>Cleaning Date</label>
-            <input type="date" id="mdCleaningDate">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Description</label>
-            <input type="text" id="mdDescription" placeholder="Data alumni Magister Teknik Elektro USK">
-          </div>
-        </div>
-        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">Issues Fixed (satu per baris)</label>
-        <textarea id="mdIssues" rows="3" placeholder="Removed leading single quotes from NPM&#10;..."></textarea>
-        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.5rem;margin-top:.75rem">Daftar Pembimbing (<span id="mdSupCount">0</span>)</label>
-        <div id="mdSupervisors" style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem"></div>
-        <div class="form-row" style="margin-top:.5rem">
-          <div class="form-group" style="flex:3">
-            <input type="text" id="mdNewSup" placeholder="Tambah pembimbing baru...">
-          </div>
-          <div style="flex:0 0 auto;display:flex;align-items:flex-end">
-            <button class="btn btn-sm btn-success" onclick="app.addSupervisor()">+</button>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:.5rem">
+            Auto-clean: trim whitespace, fix NPM leading quotes, generate searchText, set graduationYear = <span id="wizardYearDisplay">—</span>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══ Panel: Template ═══ -->
-  <div class="panel" id="panel-template">
+  <!-- ═══ Panel: Config ═══ -->
+  <div class="panel" id="panel-config">
+
+    <!-- Load config -->
     <div class="card">
-      <h2>📄 Buat Template JSONL</h2>
-      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
-        Buat file JSONL kosong dengan struktur field yang diinginkan.
-      </p>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Fields (pisah koma)</label>
-          <input type="text" id="templateFields" value="id,name,npm,graduationYear,thesis,supervisors">
-        </div>
+      <h2>📂 Load Config</h2>
+      <div class="drop-zone" id="configDropZone">
+        <div class="icon">📁</div>
+        <div>Drag & drop <strong>alumni-metadata.json</strong></div>
+        <div style="font-size:.75rem;margin-top:.35rem">atau klik untuk pilih file</div>
       </div>
-      <button class="btn btn-primary" onclick="app.createTemplate()">📄 Buat Template</button>
     </div>
 
+    <!-- Metadata Editor -->
     <div class="card">
-      <h2>ℹ️ Format Data</h2>
-      <pre style="background:#f8fafc;padding:.75rem;border-radius:8px;font-size:.78rem;overflow-x:auto">{
-  "id": "1209200200012",
-  "name": "Edi Sukriansyah",
-  "npm": "1209200200012",
-  "graduationYear": 2012,
-  "thesis": "Penerapan Metode ...",
-  "supervisors": ["Dr. A", "Dr. B"],
-  "searchText": "... (auto-generated)"
-}</pre>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="margin:0">⚙️ alumni-metadata.json</h2>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-primary" onclick="app.autoGenerateConfig()">🔄 Auto-generate dari Data</button>
+          <button class="btn btn-sm btn-success" onclick="app.saveConfig()">💾 Download</button>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:.75rem">
+        <div class="form-group">
+          <label>Total Alumni</label>
+          <input type="number" id="cfgTotal" value="0">
+        </div>
+        <div class="form-group">
+          <label>Last Updated</label>
+          <input type="date" id="cfgLastUpdated">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tahun (pisah koma)</label>
+          <input type="text" id="cfgYears" placeholder="2012, 2013, 2014, ...">
+        </div>
+      </div>
+
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">Jumlah per Tahun</label>
+      <div id="cfgCountsEditor" style="margin-bottom:.75rem"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cleaned By</label>
+          <input type="text" id="cfgCleanedBy" placeholder="Nama / tim">
+        </div>
+        <div class="form-group">
+          <label>Cleaning Date</label>
+          <input type="date" id="cfgCleaningDate">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="cfgDescription" placeholder="Data alumni Magister Teknik Elektro USK">
+        </div>
+      </div>
+
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">Issues Fixed (satu per baris)</label>
+      <textarea id="cfgIssues" rows="3" placeholder="Removed leading single quotes from NPM&#10;..."></textarea>
+
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.5rem;margin-top:.75rem">Daftar Pembimbing (<span id="cfgSupCount">0</span>)</label>
+      <div id="cfgSupervisors" style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem"></div>
+      <div class="form-row" style="margin-top:.5rem">
+        <div class="form-group" style="flex:3">
+          <input type="text" id="cfgNewSup" placeholder="Tambah pembimbing baru..." onkeydown="if(event.key==='Enter')app.addSupervisor()">
+        </div>
+        <div style="flex:0 0 auto;display:flex;align-items:flex-end">
+          <button class="btn btn-sm btn-success" onclick="app.addSupervisor()">+</button>
+        </div>
+      </div>
+
+      <!-- Raw JSON -->
+      <div style="margin-top:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="const rb=document.getElementById('rawBody');rb.style.display=rb.style.display==='none'?'block':'none';this.querySelector('.raw-toggle').textContent=rb.style.display==='none'?'▸':'▾'">
+          <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin:0">Raw JSON</label>
+          <span class="raw-toggle" style="font-size:1rem;color:var(--text-muted)">▾</span>
+        </div>
+        <div id="rawBody" style="display:none;margin-top:.5rem">
+          <textarea id="cfgRaw" rows="10" style="font-family:monospace;font-size:.78rem"></textarea>
+          <button class="btn btn-sm btn-outline" style="margin-top:.35rem" onclick="app.parseRawConfig()">Parse Raw JSON</button>
+        </div>
+      </div>
     </div>
   </div>
 
