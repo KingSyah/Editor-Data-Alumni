@@ -37,15 +37,44 @@
   <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" data-tab="data">📊 Data</button>
-    <button class="tab" data-tab="import">📥 Import</button>
     <button class="tab" data-tab="add">➕ Tambah</button>
     <button class="tab" data-tab="manifest">📋 Manifest</button>
     <button class="tab" data-tab="metadata">📑 Metadata</button>
     <button class="tab" data-tab="template">📄 Template</button>
   </div>
 
-  <!-- ═══ Panel: Data ═══ -->
+  <!-- ═══ Panel: Data (includes Import) ═══ -->
   <div class="panel active" id="panel-data">
+
+    <!-- Import Section (collapsible) -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('importBody').style.display=document.getElementById('importBody').style.display==='none'?'block':'none';this.querySelector('.toggle-icon').textContent=document.getElementById('importBody').style.display==='none'?'▸':'▾'">
+        <h2 style="margin:0">📥 Import Data</h2>
+        <span class="toggle-icon" style="font-size:1.2rem;color:var(--text-muted)">▾</span>
+      </div>
+      <div id="importBody">
+        <div class="form-row" style="margin-top:.75rem">
+          <div style="flex:1;min-width:200px">
+            <div class="drop-zone" id="dropZone" style="padding:1rem">
+              <div class="icon" style="font-size:1.5rem;margin-bottom:.25rem">📁</div>
+              <div style="font-size:.82rem">Drag & drop <strong>.jsonl</strong> / <strong>.csv</strong> atau klik</div>
+            </div>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.35rem">atau dari Google Sheets:</div>
+            <div style="display:flex;gap:.35rem">
+              <input type="url" id="gsheetUrl" placeholder="Paste URL Google Sheets..." style="flex:1">
+              <button class="btn btn-sm btn-primary" onclick="app.importGSheet()">📥</button>
+            </div>
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">
+              Sheet harus di-share "Anyone with the link"
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Table -->
     <div class="card">
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
         <input type="text" id="searchBox" placeholder="🔍 Cari nama, NPM, tesis, pembimbing…" style="flex:1;min-width:200px" oninput="app.filterTable()">
@@ -68,37 +97,6 @@
           <tbody id="dataBody"></tbody>
         </table>
       </div>
-    </div>
-  </div>
-
-  <!-- ═══ Panel: Import ═══ -->
-  <div class="panel" id="panel-import">
-    <div class="card">
-      <h2>📂 Import File</h2>
-      <div class="drop-zone" id="dropZone">
-        <div class="icon">📁</div>
-        <div>Drag & drop file <strong>.jsonl</strong> atau <strong>.csv</strong> di sini</div>
-        <div style="font-size:.75rem;margin-top:.35rem">atau klik untuk pilih file</div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>📊 Import dari Google Sheets</h2>
-      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
-        Paste URL Google Sheets. Pastikan sheet di-share <strong>"Anyone with the link"</strong>.
-      </p>
-      <div class="form-row">
-        <div class="form-group" style="flex:3">
-          <input type="url" id="gsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/XXXXXXX/edit#gid=0">
-        </div>
-        <div style="flex:0 0 auto;display:flex;align-items:flex-end">
-          <button class="btn btn-primary" onclick="app.importGSheet()">📥 Import</button>
-        </div>
-      </div>
-      <h3>Mapping kolom otomatis</h3>
-      <p style="font-size:.78rem;color:var(--text-muted)">
-        <code>nama→name</code>, <code>NPM→npm</code>, <code>tahun/angkatan→graduationYear</code>, 
-        <code>judul/tesis→thesis</code>, <code>pembimbing→supervisors</code>. Pisah dengan <code>;</code>
-      </p>
     </div>
   </div>
 
@@ -278,7 +276,6 @@
       <span class="footer-text" id="copyright-text"></span>
       <span class="footer-crown">👑</span>
     </div>
-    <div style="margin-top:.5rem">Alumni Data Manager &middot; <a href="https://mte.usk.ac.id" target="_blank" style="color:var(--primary)">MTE USK</a></div>
   </footer>
 </div>
 
