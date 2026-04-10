@@ -38,8 +38,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="data">📊 Data</button>
     <button class="tab" data-tab="add">➕ Tambah</button>
-    <button class="tab" data-tab="manifest">📋 Manifest</button>
-    <button class="tab" data-tab="metadata">📑 Metadata</button>
+    <button class="tab" data-tab="config">⚙️ Config</button>
     <button class="tab" data-tab="template">📄 Template</button>
   </div>
 
@@ -120,122 +119,111 @@
     </div>
   </div>
 
-  <!-- ═══ Panel: Manifest ═══ -->
-  <div class="panel" id="panel-manifest">
+  <!-- ═══ Panel: Config (Manifest + Metadata) ═══ -->
+  <div class="panel" id="panel-config">
+
+    <!-- Shared drop zone -->
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
-        <h2 style="margin:0">📋 Edit manifest.json</h2>
-        <div class="btn-group">
-          <button class="btn btn-outline" onclick="app.loadManifestFile()">📂 Load</button>
-          <button class="btn btn-success" onclick="app.saveManifest()">💾 Download</button>
-          <button class="btn btn-primary" onclick="app.autoGenerateManifest()">🔄 Auto-generate dari Data</button>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Total Alumni</label>
-          <input type="number" id="mfTotal" value="0">
-        </div>
-        <div class="form-group">
-          <label>Last Updated</label>
-          <input type="date" id="mfLastUpdated">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Tahun (pisah koma)</label>
-          <input type="text" id="mfYears" placeholder="2012, 2013, 2014, ...">
-        </div>
-      </div>
-
-      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">
-        Jumlah per Tahun (JSON)
-      </label>
-      <textarea id="mfCounts" rows="5" placeholder='{"2012":23,"2013":37,...}'></textarea>
-      
-      <p style="font-size:.78rem;color:var(--text-muted);margin-top:.5rem">
-        💡 Klik <strong>Auto-generate</strong> untuk hitung ulang dari data JSONL yang sedang dimuat.
-      </p>
-    </div>
-
-    <div class="card">
-      <h2>Raw JSON</h2>
-      <textarea id="mfRaw" rows="12" style="font-family:monospace;font-size:.8rem" placeholder="Load manifest.json atau klik Auto-generate"></textarea>
-    </div>
-  </div>
-
-  <!-- ═══ Panel: Metadata ═══ -->
-  <div class="panel" id="panel-metadata">
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
-        <h2 style="margin:0">📑 Edit alumni-metadata.json</h2>
-        <div class="btn-group">
-          <button class="btn btn-outline" onclick="app.loadMetaFile()">📂 Load</button>
-          <button class="btn btn-success" onclick="app.saveMetadata()">💾 Download</button>
-          <button class="btn btn-primary" onclick="app.autoGenerateMetadata()">🔄 Auto-generate dari Data</button>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Total Alumni</label>
-          <input type="number" id="mdTotal" value="0">
-        </div>
-        <div class="form-group">
-          <label>Last Updated</label>
-          <input type="date" id="mdLastUpdated">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Tahun Angkatan (pisah koma)</label>
-          <input type="text" id="mdYears" placeholder="2012, 2013, 2014, ...">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Cleaned By</label>
-          <input type="text" id="mdCleanedBy" placeholder="Nama / tim">
-        </div>
-        <div class="form-group">
-          <label>Cleaning Date</label>
-          <input type="date" id="mdCleaningDate">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Description</label>
-          <input type="text" id="mdDescription" placeholder="Data alumni Magister Teknik Elektro USK">
-        </div>
-      </div>
-
-      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">
-        Issues Fixed (satu per baris)
-      </label>
-      <textarea id="mdIssues" rows="4" placeholder="Removed leading single quotes from NPM&#10;Cleaned supervisor numbering&#10;..."></textarea>
-
-      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.5rem;margin-top:.75rem">
-        Daftar Pembimbing (<span id="mdSupCount">0</span>)
-      </label>
-      <div id="mdSupervisors" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem"></div>
-      <div class="form-row" style="margin-top:.5rem">
-        <div class="form-group" style="flex:3">
-          <input type="text" id="mdNewSup" placeholder="Tambah pembimbing baru...">
-        </div>
-        <div style="flex:0 0 auto;display:flex;align-items:flex-end">
-          <button class="btn btn-sm btn-success" onclick="app.addSupervisor()">+</button>
-        </div>
+      <h2>📂 Load Config File</h2>
+      <div class="drop-zone" id="configDropZone">
+        <div class="icon">📁</div>
+        <div>Drag & drop <strong>manifest.json</strong> atau <strong>alumni-metadata.json</strong></div>
+        <div style="font-size:.75rem;margin-top:.35rem">Auto-detect berdasarkan nama file & isi</div>
       </div>
     </div>
 
+    <!-- Manifest Section -->
     <div class="card">
-      <h2>Raw JSON</h2>
-      <textarea id="mdRaw" rows="12" style="font-family:monospace;font-size:.8rem" placeholder="Load metadata atau klik Auto-generate"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('manifestBody').style.display=document.getElementById('manifestBody').style.display==='none'?'block':'none';this.querySelector('.mf-toggle').textContent=document.getElementById('manifestBody').style.display==='none'?'▸':'▾'">
+        <h2 style="margin:0">📋 manifest.json</h2>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <div class="btn-group">
+            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();app.autoGenerateManifest()">🔄 Auto-generate</button>
+            <button class="btn btn-sm btn-success" onclick="event.stopPropagation();app.saveManifest()">💾 Download</button>
+          </div>
+          <span class="mf-toggle" style="font-size:1.2rem;color:var(--text-muted)">▾</span>
+        </div>
+      </div>
+      <div id="manifestBody">
+        <div class="form-row" style="margin-top:.75rem">
+          <div class="form-group">
+            <label>Total Alumni</label>
+            <input type="number" id="mfTotal" value="0">
+          </div>
+          <div class="form-group">
+            <label>Last Updated</label>
+            <input type="date" id="mfLastUpdated">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tahun (pisah koma)</label>
+            <input type="text" id="mfYears" placeholder="2012, 2013, 2014, ...">
+          </div>
+        </div>
+        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">Jumlah per Tahun (JSON)</label>
+        <textarea id="mfCounts" rows="4" placeholder='{"2012":23,"2013":37,...}'></textarea>
+      </div>
+    </div>
+
+    <!-- Metadata Section -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('metaBody').style.display=document.getElementById('metaBody').style.display==='none'?'block':'none';this.querySelector('.md-toggle').textContent=document.getElementById('metaBody').style.display==='none'?'▸':'▾'">
+        <h2 style="margin:0">📑 alumni-metadata.json</h2>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <div class="btn-group">
+            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();app.autoGenerateMetadata()">🔄 Auto-generate</button>
+            <button class="btn btn-sm btn-success" onclick="event.stopPropagation();app.saveMetadata()">💾 Download</button>
+          </div>
+          <span class="md-toggle" style="font-size:1.2rem;color:var(--text-muted)">▾</span>
+        </div>
+      </div>
+      <div id="metaBody">
+        <div class="form-row" style="margin-top:.75rem">
+          <div class="form-group">
+            <label>Total Alumni</label>
+            <input type="number" id="mdTotal" value="0">
+          </div>
+          <div class="form-group">
+            <label>Last Updated</label>
+            <input type="date" id="mdLastUpdated">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tahun Angkatan (pisah koma)</label>
+            <input type="text" id="mdYears" placeholder="2012, 2013, 2014, ...">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cleaned By</label>
+            <input type="text" id="mdCleanedBy" placeholder="Nama / tim">
+          </div>
+          <div class="form-group">
+            <label>Cleaning Date</label>
+            <input type="date" id="mdCleaningDate">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" id="mdDescription" placeholder="Data alumni Magister Teknik Elektro USK">
+          </div>
+        </div>
+        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem">Issues Fixed (satu per baris)</label>
+        <textarea id="mdIssues" rows="3" placeholder="Removed leading single quotes from NPM&#10;..."></textarea>
+        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.5rem;margin-top:.75rem">Daftar Pembimbing (<span id="mdSupCount">0</span>)</label>
+        <div id="mdSupervisors" style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem"></div>
+        <div class="form-row" style="margin-top:.5rem">
+          <div class="form-group" style="flex:3">
+            <input type="text" id="mdNewSup" placeholder="Tambah pembimbing baru...">
+          </div>
+          <div style="flex:0 0 auto;display:flex;align-items:flex-end">
+            <button class="btn btn-sm btn-success" onclick="app.addSupervisor()">+</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
