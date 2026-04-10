@@ -55,6 +55,18 @@
     return [r.name, r.npm, r.thesis, ...(r.supervisors || [])].join(' ').toLowerCase();
   }
 
+  function normalizeSupervisorName(s) {
+    return s.trim()
+      .replace(/^[\d]+\.\s*/, '')     // remove "1. " prefix
+      .replace(/\.\./g, '.')          // double dots
+      .replace(/\bST\./g, 'S.T.')     // ST. → S.T.
+      .replace(/\bKHALIL\b/g, 'KAHLIL') // typo fix
+      .replace(/\bSYHARIAL\b/gi, 'SYAHRIAL') // typo fix
+      .replace(/\bTAUFIIQ\b/g, 'TAUFIQ') // typo fix
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   function cleanRecord(r, year) {
     // Auto-clean: trim, fix NPM, set year, generate searchText
     if (r.name) r.name = r.name.trim();
@@ -130,6 +142,8 @@
       return viewRowHTML(r, i);
     }).join('');
     $('#rowCount').textContent = `${records.length} records`;
+    const rct = $('#rowCountTop');
+    if (rct) rct.textContent = `${records.length} records`;
     updateStats();
   }
 
@@ -386,7 +400,7 @@
     // Generate unified alumni-metadata.json
     const years = Object.keys(groups).filter(y => y !== 'unknown').map(Number).sort();
     const counts = Object.fromEntries(Object.entries(groups).map(([y, d]) => [y, d.length]));
-    const allSups = [...new Set(records.flatMap(r => r.supervisors || []))].sort();
+    const allSups = [...new Set(records.flatMap(r => r.supervisors || []).map(normalizeSupervisorName))].sort();
 
     const metadata = {
       years,
@@ -688,7 +702,7 @@
       years[y] = (years[y] || 0) + 1;
       (r.supervisors || []).forEach(s => allSups.add(s));
     });
-    configSupervisors = [...allSups].sort();
+    configSupervisors = [...allSups].map(normalizeSupervisorName).sort();
     const intYears = Object.keys(years).filter(y => y !== '?').map(Number).sort((a, b) => b - a);
 
     configData = {
