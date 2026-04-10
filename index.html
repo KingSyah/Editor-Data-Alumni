@@ -38,40 +38,71 @@
   <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" data-tab="data">📊 Data</button>
-    <button class="tab" data-tab="add">➕ Tambah</button>
     <button class="tab" data-tab="newyear">🆕 Tahun Baru</button>
     <button class="tab" data-tab="config">⚙️ Config</button>
   </div>
 
-  <!-- ═══ Panel: Data (includes Import) ═══ -->
+  <!-- ═══ Panel: Data (Import + Tambah + Table) ═══ -->
   <div class="panel active" id="panel-data">
 
-    <!-- Import Section (collapsible) -->
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('importBody').style.display=document.getElementById('importBody').style.display==='none'?'block':'none';this.querySelector('.toggle-icon').textContent=document.getElementById('importBody').style.display==='none'?'▸':'▾'">
-        <h2 style="margin:0">📥 Import Data</h2>
-        <span class="toggle-icon" style="font-size:1.2rem;color:var(--text-muted)">▾</span>
+    <!-- Quick Actions Bar -->
+    <div class="card" style="padding:.75rem 1rem">
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-sm btn-primary" onclick="document.getElementById('importBody').style.display='block'" data-toggle="importBody">📥 Import</button>
+        <button class="btn btn-sm btn-success" onclick="document.getElementById('addBody').style.display='block'" data-toggle="addBody">➕ Tambah</button>
+        <span style="flex:1"></span>
+        <span id="rowCount" style="font-size:.8rem;color:var(--text-muted)">0 records</span>
       </div>
-      <div id="importBody">
-        <div class="form-row" style="margin-top:.75rem">
-          <div style="flex:1;min-width:200px">
-            <div class="drop-zone" id="dropZone" style="padding:1rem">
-              <div class="icon" style="font-size:1.5rem;margin-bottom:.25rem">📁</div>
-              <div style="font-size:.82rem">Drag & drop <strong>.jsonl</strong> / <strong>.csv</strong> atau klik</div>
-              <div style="font-size:.7rem;margin-top:.25rem;color:var(--text-muted)">Bisa drop beberapa file sekaligus (multi-year)</div>
-            </div>
-          </div>
-          <div style="flex:1;min-width:200px">
-            <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.35rem">atau dari Google Sheets:</div>
-            <div style="display:flex;gap:.35rem">
-              <input type="url" id="gsheetUrl" placeholder="Paste URL Google Sheets..." style="flex:1">
-              <button class="btn btn-sm btn-primary" onclick="app.importGSheet()">📥</button>
-            </div>
-            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">
-              Sheet harus di-share "Anyone with the link"
-            </div>
+    </div>
+
+    <!-- Import Section (collapsible) -->
+    <div class="card" id="importBody" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('importBody').style.display='none'">
+        <h2 style="margin:0">📥 Import Data</h2>
+        <span style="font-size:1.2rem;color:var(--text-muted)">✕</span>
+      </div>
+      <div class="form-row" style="margin-top:.75rem">
+        <div style="flex:1;min-width:200px">
+          <div class="drop-zone" id="dropZone" style="padding:1rem">
+            <div class="icon" style="font-size:1.5rem;margin-bottom:.25rem">📁</div>
+            <div style="font-size:.82rem">Drag & drop <strong>.jsonl</strong> / <strong>.csv</strong> atau klik</div>
+            <div style="font-size:.7rem;margin-top:.25rem;color:var(--text-muted)">Bisa drop beberapa file sekaligus (multi-year)</div>
           </div>
         </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.35rem">atau dari Google Sheets:</div>
+          <div style="display:flex;gap:.35rem">
+            <input type="url" id="gsheetUrl" placeholder="Paste URL Google Sheets..." style="flex:1">
+            <button class="btn btn-sm btn-primary" onclick="app.importGSheet()">📥</button>
+          </div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">
+            Sheet harus di-share "Anyone with the link"
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Form (collapsible) -->
+    <div class="card" id="addBody" style="display:none;border-left:4px solid var(--success)">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById('addBody').style.display='none'">
+        <h2 style="margin:0">➕ Tambah Record Baru</h2>
+        <span style="font-size:1.2rem;color:var(--text-muted)">✕</span>
+      </div>
+      <div class="form-row" style="margin-top:.75rem">
+        <div class="form-group"><label>ID</label><input type="text" id="addId" placeholder="Auto jika kosong"></div>
+        <div class="form-group"><label>Nama</label><input type="text" id="addName" placeholder="Nama lengkap"></div>
+        <div class="form-group"><label>NPM</label><input type="text" id="addNpm" placeholder="Nomor Pokok Mahasiswa"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Tahun Lulus</label><input type="number" id="addYear" placeholder="2024" min="2000" max="2030"></div>
+        <div class="form-group" style="flex:2"><label>Pembimbing</label><input type="text" id="addSupervisors" placeholder="Dr. A; Dr. B (pisah dengan ;)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Judul Tesis</label><textarea id="addThesis" rows="2" placeholder="Judul tesis lengkap"></textarea></div>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-success" onclick="app.addRecord()">➕ Tambah</button>
+        <button class="btn btn-sm btn-outline" onclick="app.addRecord(true)">➕ Tambah & Lagi</button>
       </div>
     </div>
 
@@ -101,29 +132,6 @@
           <tbody id="dataBody"></tbody>
         </table>
       </div>
-    </div>
-  </div>
-
-  <!-- ═══ Panel: Tambah ═══ -->
-  <div class="panel" id="panel-add">
-    <div class="card">
-      <h2>➕ Tambah Record Baru</h2>
-      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
-        Tambah satu per satu. Data otomatis masuk ke tabel di tab Data.
-      </p>
-      <div class="form-row">
-        <div class="form-group"><label>ID</label><input type="text" id="addId" placeholder="Auto jika kosong"></div>
-        <div class="form-group"><label>Nama</label><input type="text" id="addName" placeholder="Nama lengkap"></div>
-        <div class="form-group"><label>NPM</label><input type="text" id="addNpm" placeholder="Nomor Pokok Mahasiswa"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Tahun Lulus</label><input type="number" id="addYear" placeholder="2024" min="2000" max="2030"></div>
-        <div class="form-group" style="flex:2"><label>Pembimbing</label><input type="text" id="addSupervisors" placeholder="Dr. A; Dr. B (pisah dengan ;)"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Judul Tesis</label><textarea id="addThesis" rows="2" placeholder="Judul tesis lengkap"></textarea></div>
-      </div>
-      <button class="btn btn-success" onclick="app.addRecord()">➕ Tambah ke Data</button>
     </div>
   </div>
 
