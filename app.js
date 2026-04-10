@@ -566,7 +566,61 @@
     } catch { toast('Raw JSON tidak valid', 'error'); }
   });
 
-  // ═══ Drop Zone ═══
+  // ═══ Config Drop Zone (auto-detect manifest/metadata) ═══
+  const cdz = document.getElementById('configDropZone');
+  if (cdz) {
+    cdz.addEventListener('dragover', e => { e.preventDefault(); cdz.classList.add('drag-over'); });
+    cdz.addEventListener('dragleave', () => cdz.classList.remove('drag-over'));
+    cdz.addEventListener('drop', e => {
+      e.preventDefault(); cdz.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) loadConfigFile(file);
+    });
+    cdz.addEventListener('click', () => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = '.json';
+      inp.onchange = () => { if (inp.files[0]) loadConfigFile(inp.files[0]); };
+      inp.click();
+    });
+  }
+
+  function loadConfigFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target.result;
+      const name = file.name.toLowerCase();
+      let detected = null;
+
+      // Auto-detect by filename
+      if (name.includes('manifest')) detected = 'manifest';
+      else if (name.includes('metadata')) detected = 'metadata';
+
+      // Auto-detect by content if filename didn't match
+      if (!detected) {
+        try {
+          const obj = JSON.parse(text);
+          if (obj.years && obj.counts && 'total' in obj) detected = 'manifest';
+          else if (obj.cleaningInfo || obj.supervisors || obj.dataStructure) detected = 'metadata';
+        } catch {}
+      }
+
+      if (detected === 'manifest') {
+        loadManifestJSON(text);
+        toast('manifest.json terdeteksi & dimuat', 'success');
+      } else if (detected === 'metadata') {
+        loadMetadataJSON(text);
+        toast('alumni-metadata.json terdeteksi & dimuat', 'success');
+      } else {
+        // Try both
+        try {
+          const obj = JSON.parse(text);
+          if (obj.years) { loadManifestJSON(text); toast('Dimuat sebagai manifest', 'success'); }
+          else { loadMetadataJSON(text); toast('Dimuat sebagai metadata', 'success'); }
+        } catch { toast('JSON tidak valid', 'error'); }
+      }
+    };
+    reader.readAsText(file);
+  }
   const dz = $('#dropZone');
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
