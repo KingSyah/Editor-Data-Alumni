@@ -205,10 +205,12 @@
     renderTable();
   }
 
-  function addRecord() {
+  function addRecord(keepOpen = false) {
+    const name = $('#addName').value.trim();
+    if (!name) { toast('Nama wajib diisi', 'error'); return; }
     const r = {
       id: $('#addId').value.trim() || Date.now().toString(),
-      name: $('#addName').value.trim(),
+      name,
       npm: $('#addNpm').value.trim(),
       graduationYear: parseInt($('#addYear').value) || null,
       thesis: $('#addThesis').value.trim(),
@@ -219,7 +221,17 @@
     editingRow = null;
     renderTable();
     toast(`Ditambahkan: ${r.name}`, 'success');
-    ['#addId','#addName','#addNpm','#addYear','#addThesis','#addSupervisors'].forEach(s => $(s).value = '');
+
+    if (keepOpen) {
+      // Keep form open, clear fields for next entry, preserve year
+      const year = $('#addYear').value;
+      ['#addId','#addName','#addNpm','#addThesis','#addSupervisors'].forEach(s => $(s).value = '');
+      $('#addYear').value = year;
+      $('#addName').focus();
+    } else {
+      ['#addId','#addName','#addNpm','#addYear','#addThesis','#addSupervisors'].forEach(s => $(s).value = '');
+      $('#addBody').style.display = 'none';
+    }
   }
 
   // ═══ Search & Sort & Filter ═══
