@@ -1,6 +1,6 @@
 /**
- * Alumni Data Manager — app.js
- * JSONL editor + Manifest & Metadata manager
+ * Alumni Data Manager v2 — Merged Config + New Year Wizard
+ * Single alumni-metadata.json, seamless new-year workflow
  */
 
 (() => {
@@ -11,9 +11,10 @@
   let fileName = 'alumni.jsonl';
   let editingRow = null;
   let sortState = { by: null, asc: true };
-  let manifestData = null;
-  let metadataData = null;
-  let metaSupervisors = [];
+  let configData = null;
+  let configSupervisors = [];
+  let wizardYear = null;
+  let wizardBuffer = []; // temp records before merge
 
   // ═══ DOM ═══
   const $ = s => document.querySelector(s);
@@ -54,6 +55,22 @@
     return [r.name, r.npm, r.thesis, ...(r.supervisors || [])].join(' ').toLowerCase();
   }
 
+  function cleanRecord(r, year) {
+    // Auto-clean: trim, fix NPM, set year, generate searchText
+    if (r.name) r.name = r.name.trim();
+    if (r.npm) r.npm = r.npm.trim().replace(/^'+/, '').replace(/'+$/, '');
+    if (r.thesis) r.thesis = r.thesis.trim();
+    if (r.id) r.id = String(r.id).trim();
+    if (typeof r.graduationYear === 'string') r.graduationYear = parseInt(r.graduationYear);
+    if (!r.graduationYear && year) r.graduationYear = year;
+    if (r.supervisors && typeof r.supervisors === 'string') {
+      r.supervisors = r.supervisors.split(/[;|]/).map(s => s.trim()).filter(Boolean);
+    }
+    if (!r.supervisors) r.supervisors = [];
+    r.searchText = buildSearchText(r);
+    return r;
+  }
+
   function download(content, name, type = 'application/json') {
     const blob = new Blob([content], { type });
     const a = document.createElement('a');
@@ -76,10 +93,12 @@
       const y = r.graduationYear || '?';
       years[y] = (years[y] || 0) + 1;
     });
-    const yearCount = Object.keys(years).filter(y => y !== '?').length;
+    const yearKeys = Object.keys(years).filter(y => y !== '?').map(Number).sort((a, b) => b - a);
+    const yearCount = yearKeys.length;
     $('#statTotal').textContent = records.length;
     $('#statYears').textContent = yearCount;
     $('#statSupervisors').textContent = new Set(records.flatMap(r => r.supervisors || [])).size;
+    $('#statNewest').textContent = yearKeys[0] || '—';
 
     const sorted = Object.entries(years).sort((a, b) => {
       if (a[0] === '?') return 1;
@@ -89,13 +108,21 @@
     $('#yearBreakdown').innerHTML = sorted.map(([y, c]) =>
       `<span class="badge">${y}: ${c}</span> `
     ).join('');
+
+    // Update year filter dropdown
+    const sel = $('#filterYear');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Semua Tahun</option>';
+    yearKeys.forEach(y => {
+      sel.innerHTML += `<option value="${y}" ${String(y) === cur ? 'selected' : ''}>${y} (${years[y]})</option>`;
+    });
   }
 
   // ═══ Table ═══
   function renderTable() {
     const tbody = $('#dataBody');
     if (!records.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Belum ada data. Import file atau tambah record baru.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Belum ada data. Import file, tambah record, atau gunakan wizard Tahun Baru.</td></tr>';
       return;
     }
     tbody.innerHTML = records.map((r, i) => {
@@ -195,15 +222,18 @@
     ['#addId','#addName','#addNpm','#addYear','#addThesis','#addSupervisors'].forEach(s => $(s).value = '');
   }
 
-  // ═══ Search & Sort ═══
+  // ═══ Search & Sort & Filter ═══
   function filterTable() {
     const q = $('#searchBox').value.toLowerCase().trim();
+    const yearFilter = $('#filterYear').value;
     $$('#dataBody tr').forEach(row => {
       const idx = parseInt(row.dataset.idx);
       if (isNaN(idx)) return;
       const r = records[idx];
       const text = r.searchText || buildSearchText(r);
-      row.style.display = (!q || text.includes(q)) ? '' : 'none';
+      const matchSearch = !q || text.includes(q);
+      const matchYear = !yearFilter || String(r.graduationYear) === yearFilter;
+      row.style.display = (matchSearch && matchYear) ? '' : 'none';
     });
   }
 
@@ -222,20 +252,41 @@
 
   // ═══ Import ═══
   function loadFile(file) {
-    fileName = file.name;
     const reader = new FileReader();
     reader.onload = e => {
       const text = e.target.result;
-      if (file.name.endsWith('.csv')) importCSV(text);
-      else if (file.name === 'manifest.json') { loadManifestJSON(text); return; }
-      else if (file.name.includes('metadata')) { loadMetadataJSON(text); return; }
-      else {
-        records = parseJSONL(text);
-        records.forEach(r => { if (!r.searchText) r.searchText = buildSearchText(r); });
+      const name = file.name.toLowerCase();
+
+      // Auto-detect config files
+      if (name.includes('metadata') || name === 'alumni-metadata.json') {
+        try {
+          const obj = JSON.parse(text);
+          if (obj.years || obj.cleaningInfo || obj.supervisors) {
+            loadConfigJSON(text);
+            toast(`Config dimuat dari ${file.name}`, 'success');
+            return;
+          }
+        } catch {}
       }
+
+      if (file.name.endsWith('.csv')) {
+        importCSV(text);
+      } else {
+        let parsed = parseJSONL(text);
+        // Try parsing as JSON array
+        if (!parsed.length) {
+          try {
+            const arr = JSON.parse(text);
+            if (Array.isArray(arr)) parsed = arr;
+          } catch {}
+        }
+        parsed.forEach(r => cleanRecord(r));
+        records = [...records, ...parsed];
+      }
+      fileName = file.name;
       editingRow = null;
       renderTable();
-      toast(`Loaded ${records.length} records dari ${file.name}`, 'success');
+      toast(`Loaded dari ${file.name}`, 'success');
     };
     reader.readAsText(file);
   }
@@ -259,16 +310,14 @@
     const known = {nama:'name',namalengkap:'name',npm:'npm',nip:'npm',tahun:'graduationYear',angkatan:'graduationYear',year:'graduationYear',judul:'thesis',thesis:'thesis',tesis:'thesis',pembimbing:'supervisors',supervisor:'supervisors',supervisors:'supervisors'};
     headers.forEach(h => { const k=h.toLowerCase().replace(/[^a-z]/g,''); if(known[k]&&known[k]!==h) mapping[h]=known[k]; });
 
-    records = lines.slice(1).map(line => {
+    const parsed = lines.slice(1).map(line => {
       const vals = parseCSVLine(line);
       const obj = {};
       headers.forEach((h, i) => { obj[mapping[h]||h] = (vals[i]||'').trim(); });
-      if (obj.graduationYear) obj.graduationYear = parseInt(obj.graduationYear);
-      if (obj.supervisors && typeof obj.supervisors === 'string')
-        obj.supervisors = obj.supervisors.split(/[;|]/).map(s => s.trim()).filter(Boolean);
-      obj.searchText = buildSearchText(obj);
+      cleanRecord(obj);
       return obj;
     });
+    records = [...records, ...parsed];
   }
 
   async function importGSheet() {
@@ -286,14 +335,14 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       importCSV(await res.text());
       editingRow = null; renderTable();
-      toast(`Imported ${records.length} records`, 'success');
+      toast(`Imported dari Google Sheets`, 'success');
     } catch (err) { toast(`Gagal: ${err.message}`, 'error'); }
   }
 
   // ═══ Export ═══
   function exportJSONL() {
     if (!records.length) { toast('Tidak ada data', 'error'); return; }
-    download(toJSONL(records), fileName, 'application/jsonl');
+    download(toJSONL(records), fileName.replace(/\.\w+$/, '') + '.jsonl', 'application/jsonl');
     toast(`Exported ${records.length} records`, 'success');
   }
 
@@ -308,7 +357,7 @@
         v = `"${v.replace(/"/g,'""')}"`;
       return v ?? '';
     }).join(','));
-    download(header+'\n'+rows.join('\n'), fileName.replace('.jsonl','.csv'), 'text/csv');
+    download(header+'\n'+rows.join('\n'), fileName.replace(/\.\w+$/, '') + '.csv', 'text/csv');
     toast('CSV exported', 'success');
   }
 
@@ -316,158 +365,286 @@
     if (!records.length) { toast('Tidak ada data', 'error'); return; }
     const groups = {};
     records.forEach(r => { const y = r.graduationYear || 'unknown'; (groups[y]=groups[y]||[]).push(r); });
-    Object.entries(groups).sort().forEach(([y, data]) => download(toJSONL(data), `${y}.jsonl`));
-    const years = Object.keys(groups).filter(y => y!=='unknown').map(Number).sort();
-    const manifest = { years, counts: Object.fromEntries(Object.entries(groups).map(([y,d])=>[y,d.length])), total: records.length, lastUpdated: new Date().toISOString().split('T')[0] };
-    download(JSON.stringify(manifest, null, 2), 'manifest.json');
-    toast(`Split ${Object.keys(groups).length} files + manifest`, 'success');
-  }
 
-  // ═══ Template ═══
-  function createTemplate() {
-    const fields = ($('#templateFields').value||'id,name,npm,graduationYear,thesis,supervisors').split(',').map(f=>f.trim());
-    const sample = {};
-    fields.forEach(f => {
-      switch(f){
-        case 'id': sample.id='XXXXXXXXXXXX'; break;
-        case 'name': sample.name='Nama Lengkap'; break;
-        case 'npm': sample.npm='XXXXXXXXXXXX'; break;
-        case 'graduationYear': sample.graduationYear=2024; break;
-        case 'thesis': sample.thesis='Judul Tesis'; break;
-        case 'supervisors': sample.supervisors=['Pembimbing 1','Pembimbing 2']; break;
-        case 'searchText': sample.searchText=''; break;
-        default: sample[f]='';
-      }
+    // Download each year's JSONL
+    Object.entries(groups).sort().forEach(([y, data]) => {
+      download(toJSONL(data), `${y}.jsonl`);
     });
-    sample.searchText = buildSearchText(sample);
-    records = [sample]; editingRow = null; renderTable();
-    toast('Template dibuat', 'success');
-  }
 
-  // ══════════════════════════════════════════
-  // MANIFEST EDITOR
-  // ══════════════════════════════════════════
-  function loadManifestFile() {
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = '.json';
-    inp.onchange = () => {
-      const reader = new FileReader();
-      reader.onload = e => loadManifestJSON(e.target.result);
-      reader.readAsText(inp.files[0]);
-    };
-    inp.click();
-  }
+    // Generate unified alumni-metadata.json
+    const years = Object.keys(groups).filter(y => y !== 'unknown').map(Number).sort();
+    const counts = Object.fromEntries(Object.entries(groups).map(([y, d]) => [y, d.length]));
+    const allSups = [...new Set(records.flatMap(r => r.supervisors || []))].sort();
 
-  function loadManifestJSON(text) {
-    try {
-      manifestData = JSON.parse(text);
-      populateManifestForm();
-      toast('manifest.json dimuat', 'success');
-    } catch { toast('JSON tidak valid', 'error'); }
-  }
-
-  function populateManifestForm() {
-    if (!manifestData) return;
-    $('#mfTotal').value = manifestData.total || 0;
-    $('#mfLastUpdated').value = (manifestData.lastUpdated || '').split('T')[0];
-    $('#mfYears').value = (manifestData.years || []).join(', ');
-    $('#mfCounts').value = JSON.stringify(manifestData.counts || {}, null, 2);
-    $('#mfRaw').value = JSON.stringify(manifestData, null, 2);
-  }
-
-  function autoGenerateManifest() {
-    if (!records.length) { toast('Load data JSONL dulu', 'error'); return; }
-    const years = {}; 
-    records.forEach(r => { const y = r.graduationYear || 'unknown'; years[y] = (years[y]||0)+1; });
-    const intYears = Object.keys(years).filter(y => y !== 'unknown').map(Number).sort();
-    manifestData = {
-      years: intYears,
-      counts: years,
-      total: records.length,
-      lastUpdated: new Date().toISOString().split('T')[0]
-    };
-    populateManifestForm();
-    toast('Manifest di-generate dari data', 'success');
-  }
-
-  function saveManifest() {
-    // Sync form → raw JSON
-    syncManifestFromForm();
-    if (!manifestData) { toast('Tidak ada data', 'error'); return; }
-    download(JSON.stringify(manifestData, null, 2), 'manifest.json');
-    toast('manifest.json di-download', 'success');
-  }
-
-  function syncManifestFromForm() {
-    const yearsStr = $('#mfYears').value.trim();
-    const years = yearsStr ? yearsStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
-    let counts = {};
-    try { counts = JSON.parse($('#mfCounts').value); } catch {}
-    manifestData = {
+    const metadata = {
       years,
       counts,
-      total: parseInt($('#mfTotal').value) || 0,
-      lastUpdated: $('#mfLastUpdated').value || new Date().toISOString().split('T')[0]
+      totalAlumni: records.length,
+      lastUpdated: new Date().toISOString(),
+      dataStructure: {
+        fields: ['id', 'name', 'npm', 'graduationYear', 'thesis', 'supervisors', 'searchText'],
+        description: 'Data alumni Magister Teknik Elektro USK'
+      },
+      cleaningInfo: {
+        cleanedBy: 'Alumni Data Manager',
+        issuesFixed: ['Auto-generated from split'],
+        cleaningDate: new Date().toISOString().split('T')[0]
+      },
+      supervisors: allSups
     };
-    $('#mfRaw').value = JSON.stringify(manifestData, null, 2);
+
+    download(JSON.stringify(metadata, null, 2), 'alumni-metadata.json');
+    toast(`Split ${Object.keys(groups).length} JSONL + alumni-metadata.json`, 'success');
   }
 
-  // Watch form changes → update raw JSON
-  ['mfTotal','mfLastUpdated','mfYears','mfCounts'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', syncManifestFromForm);
-    if (el) el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(syncManifestFromForm, 500); });
-  });
-
-  // Watch raw JSON → update form
-  const mfRaw = document.getElementById('mfRaw');
-  if (mfRaw) mfRaw.addEventListener('change', () => {
-    try {
-      manifestData = JSON.parse(mfRaw.value);
-      populateManifestForm();
-    } catch { toast('Raw JSON tidak valid', 'error'); }
-  });
-
   // ══════════════════════════════════════════
-  // METADATA EDITOR
+  // NEW YEAR WIZARD
   // ══════════════════════════════════════════
-  function loadMetaFile() {
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = '.json';
-    inp.onchange = () => {
-      const reader = new FileReader();
-      reader.onload = e => loadMetadataJSON(e.target.result);
-      reader.readAsText(inp.files[0]);
-    };
-    inp.click();
+  function wizardSetYear() {
+    const y = parseInt($('#newYearInput').value);
+    if (!y || y < 2000 || y > 2030) { toast('Masukkan tahun yang valid (2000-2030)', 'error'); return; }
+
+    // Check if year already exists
+    const existing = records.filter(r => r.graduationYear === y);
+    if (existing.length) {
+      if (!confirm(`Tahun ${y} sudah ada ${existing.length} record. Lanjutkan? (data baru akan ditambahkan)`)) return;
+    }
+
+    wizardYear = y;
+    wizardBuffer = [];
+    $('#wizardYearLabel').textContent = y;
+    $('#wizardYearDisplay').textContent = y;
+    $('#wizardCount').textContent = '';
+    $('#wizardStep2').style.opacity = '1';
+    $('#wizardStep2').style.pointerEvents = 'auto';
+    $('#wizardStep3').style.opacity = '.4';
+    $('#wizardStep3').style.pointerEvents = 'none';
+    toast(`Tahun ${y} dipilih. Import data sekarang.`, 'info');
   }
 
-  function loadMetadataJSON(text) {
+  function wizardParsePaste() {
+    const text = $('#newYearPaste').value.trim();
+    if (!text) { toast('Paste data dulu', 'error'); return; }
+
+    let parsed = [];
+    // Try JSONL first
     try {
-      metadataData = JSON.parse(text);
-      metaSupervisors = [...(metadataData.supervisors || [])];
-      populateMetaForm();
-      toast('alumni-metadata.json dimuat', 'success');
+      parsed = parseJSONL(text);
+    } catch {}
+    // Try JSON array
+    if (!parsed.length) {
+      try {
+        const arr = JSON.parse(text);
+        if (Array.isArray(arr)) parsed = arr;
+      } catch {}
+    }
+    // Try line-by-line CSV-like (name, npm, thesis)
+    if (!parsed.length) {
+      const lines = text.split('\n').filter(l => l.trim());
+      parsed = lines.map(line => {
+        const parts = line.split(/[,\t]/).map(p => p.trim());
+        return { name: parts[0] || '', npm: parts[1] || '', thesis: parts[2] || '', supervisors: [] };
+      });
+    }
+
+    if (!parsed.length) { toast('Tidak bisa parse data', 'error'); return; }
+
+    parsed.forEach(r => cleanRecord(r, wizardYear));
+    wizardBuffer = [...wizardBuffer, ...parsed];
+    enableStep3();
+    toast(`${parsed.length} record di-parse (${wizardBuffer.length} total di buffer)`, 'success');
+    $('#newYearPaste').value = '';
+  }
+
+  function wizardTemplate(count) {
+    wizardBuffer = Array.from({ length: count }, (_, i) => ({
+      id: '',
+      name: '',
+      npm: '',
+      graduationYear: wizardYear,
+      thesis: '',
+      supervisors: [],
+      searchText: ''
+    }));
+    enableStep3();
+    toast(`${count} baris kosong dibuat untuk tahun ${wizardYear}`, 'success');
+  }
+
+  async function wizardImportGSheet() {
+    let url = $('#newYearGSheet').value.trim();
+    if (!url) { toast('Masukkan URL', 'error'); return; }
+    const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) {
+      const id = match[1];
+      const gid = (url.match(/gid=(\d+)/) || [null,'0'])[1];
+      url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+    }
+    toast('Mengambil data…', 'info');
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) { toast('Sheet kosong', 'error'); return; }
+      const headers = parseCSVLine(lines[0]);
+      const mapping = {};
+      const known = {nama:'name',namalengkap:'name',npm:'npm',nip:'npm',tahun:'graduationYear',angkatan:'graduationYear',year:'graduationYear',judul:'thesis',thesis:'thesis',tesis:'thesis',pembimbing:'supervisors',supervisor:'supervisors',supervisors:'supervisors'};
+      headers.forEach(h => { const k=h.toLowerCase().replace(/[^a-z]/g,''); if(known[k]&&known[k]!==h) mapping[h]=known[k]; });
+
+      const parsed = lines.slice(1).map(line => {
+        const vals = parseCSVLine(line);
+        const obj = {};
+        headers.forEach((h, i) => { obj[mapping[h]||h] = (vals[i]||'').trim(); });
+        cleanRecord(obj, wizardYear);
+        return obj;
+      });
+      wizardBuffer = [...wizardBuffer, ...parsed];
+      enableStep3();
+      toast(`${parsed.length} record di-import dari Sheets (${wizardBuffer.length} total)`, 'success');
+    } catch (err) { toast(`Gagal: ${err.message}`, 'error'); }
+  }
+
+  function enableStep3() {
+    $('#wizardStep3').style.opacity = '1';
+    $('#wizardStep3').style.pointerEvents = 'auto';
+    $('#wizardCount').textContent = `${wizardBuffer.length} record di buffer`;
+  }
+
+  function wizardMerge() {
+    if (!wizardBuffer.length) { toast('Buffer kosong', 'error'); return; }
+    // Final clean pass
+    wizardBuffer.forEach(r => cleanRecord(r, wizardYear));
+    records = [...records, ...wizardBuffer];
+    const count = wizardBuffer.length;
+    wizardBuffer = [];
+    editingRow = null;
+    renderTable();
+    toast(`${count} record tahun ${wizardYear} di-merge ke data utama`, 'success');
+
+    // Reset wizard
+    $('#wizardStep2').style.opacity = '.4';
+    $('#wizardStep2').style.pointerEvents = 'none';
+    $('#wizardStep3').style.opacity = '.4';
+    $('#wizardStep3').style.pointerEvents = 'none';
+    $('#wizardCount').textContent = '';
+    $('#newYearInput').value = '';
+  }
+
+  // Setup wizard drop zone
+  function initWizardDrop() {
+    const dz = $('#newYearDrop');
+    if (!dz) return;
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const text = ev.target.result;
+          let parsed = [];
+          if (file.name.endsWith('.csv')) {
+            const lines = text.trim().split('\n');
+            if (lines.length >= 2) {
+              const headers = parseCSVLine(lines[0]);
+              parsed = lines.slice(1).map(line => {
+                const vals = parseCSVLine(line);
+                const obj = {};
+                headers.forEach((h, i) => { obj[h] = (vals[i]||'').trim(); });
+                return obj;
+              });
+            }
+          } else {
+            parsed = parseJSONL(text);
+            if (!parsed.length) {
+              try { const arr = JSON.parse(text); if (Array.isArray(arr)) parsed = arr; } catch {}
+            }
+          }
+          parsed.forEach(r => cleanRecord(r, wizardYear));
+          wizardBuffer = [...wizardBuffer, ...parsed];
+          enableStep3();
+          toast(`${parsed.length} record dari ${file.name}`, 'success');
+        };
+        reader.readAsText(file);
+      }
+    });
+    dz.addEventListener('click', () => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = '.jsonl,.json,.csv'; inp.multiple = true;
+      inp.onchange = () => {
+        for (const file of inp.files) {
+          const reader = new FileReader();
+          reader.onload = ev => {
+            const text = ev.target.result;
+            let parsed = parseJSONL(text);
+            if (!parsed.length) { try { const a = JSON.parse(text); if (Array.isArray(a)) parsed = a; } catch {} }
+            parsed.forEach(r => cleanRecord(r, wizardYear));
+            wizardBuffer = [...wizardBuffer, ...parsed];
+            enableStep3();
+            toast(`${parsed.length} record dari ${file.name}`, 'success');
+          };
+          reader.readAsText(file);
+        }
+      };
+      inp.click();
+    });
+  }
+
+  // ══════════════════════════════════════════
+  // CONFIG EDITOR (merged alumni-metadata.json)
+  // ══════════════════════════════════════════
+  function loadConfigJSON(text) {
+    try {
+      configData = JSON.parse(text);
+      configSupervisors = [...(configData.supervisors || [])];
+      populateConfigForm();
     } catch { toast('JSON tidak valid', 'error'); }
   }
 
-  function populateMetaForm() {
-    if (!metadataData) return;
-    $('#mdTotal').value = metadataData.totalAlumni || 0;
-    $('#mdLastUpdated').value = (metadataData.lastUpdated || '').split('T')[0];
-    $('#mdYears').value = (metadataData.graduationYears || []).join(', ');
-    $('#mdCleanedBy').value = metadataData.cleaningInfo?.cleanedBy || '';
-    $('#mdCleaningDate').value = metadataData.cleaningInfo?.cleaningDate || '';
-    $('#mdDescription').value = metadataData.dataStructure?.description || '';
-    $('#mdIssues').value = (metadataData.cleaningInfo?.issuesFixed || []).join('\n');
+  function populateConfigForm() {
+    if (!configData) return;
+    $('#cfgTotal').value = configData.totalAlumni || 0;
+    $('#cfgLastUpdated').value = (configData.lastUpdated || '').split('T')[0];
+    $('#cfgYears').value = (configData.years || []).join(', ');
+    $('#cfgCleanedBy').value = configData.cleaningInfo?.cleanedBy || '';
+    $('#cfgCleaningDate').value = configData.cleaningInfo?.cleaningDate || '';
+    $('#cfgDescription').value = configData.dataStructure?.description || '';
+    $('#cfgIssues').value = (configData.cleaningInfo?.issuesFixed || []).join('\n');
+
+    // Counts editor
+    renderCountsEditor();
     renderSupervisorsList();
-    $('#mdRaw').value = JSON.stringify(metadataData, null, 2);
+    syncRawFromForm();
+  }
+
+  function renderCountsEditor() {
+    const container = $('#cfgCountsEditor');
+    const counts = configData?.counts || {};
+    const years = configData?.years || [];
+    const allYears = [...new Set([...years, ...Object.keys(counts).filter(k => k !== 'unknown').map(Number)])].sort((a, b) => b - a);
+    container.innerHTML = allYears.map(y => `
+      <div class="count-cell">
+        <label>${y}</label>
+        <input type="number" value="${counts[y] || 0}" data-count-year="${y}" min="0">
+      </div>
+    `).join('') + (counts.unknown ? `
+      <div class="count-cell">
+        <label>?</label>
+        <input type="number" value="${counts.unknown || 0}" data-count-year="unknown" min="0">
+      </div>
+    ` : '');
+
+    // Listen for changes
+    container.querySelectorAll('input[data-count-year]').forEach(el => {
+      el.addEventListener('change', syncRawFromForm);
+    });
   }
 
   function renderSupervisorsList() {
-    const container = $('#mdSupervisors');
-    $('#mdSupCount').textContent = metaSupervisors.length;
-    container.innerHTML = metaSupervisors.map((s, i) => `
+    const container = $('#cfgSupervisors');
+    $('#cfgSupCount').textContent = configSupervisors.length;
+    container.innerHTML = configSupervisors.map((s, i) => `
       <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.25rem;font-size:.82rem">
         <span style="flex:1">${esc(s)}</span>
         <button class="btn btn-sm btn-danger" onclick="app.removeSupervisor(${i})" style="padding:.15rem .4rem;font-size:.7rem">✕</button>
@@ -476,163 +653,150 @@
   }
 
   function addSupervisor() {
-    const val = $('#mdNewSup').value.trim();
+    const val = $('#cfgNewSup').value.trim();
     if (!val) return;
-    metaSupervisors.push(val);
-    $('#mdNewSup').value = '';
+    configSupervisors.push(val);
+    $('#cfgNewSup').value = '';
     renderSupervisorsList();
-    syncMetaFromForm();
+    syncRawFromForm();
   }
 
   function removeSupervisor(i) {
-    metaSupervisors.splice(i, 1);
+    configSupervisors.splice(i, 1);
     renderSupervisorsList();
-    syncMetaFromForm();
+    syncRawFromForm();
   }
 
-  function autoGenerateMetadata() {
+  function autoGenerateConfig() {
     if (!records.length) { toast('Load data JSONL dulu', 'error'); return; }
     const years = {};
     const allSups = new Set();
     records.forEach(r => {
       const y = r.graduationYear || '?';
-      years[y] = (years[y]||0)+1;
-      (r.supervisors||[]).forEach(s => allSups.add(s));
+      years[y] = (years[y] || 0) + 1;
+      (r.supervisors || []).forEach(s => allSups.add(s));
     });
-    metaSupervisors = [...allSups].sort();
-    metadataData = {
+    configSupervisors = [...allSups].sort();
+    const intYears = Object.keys(years).filter(y => y !== '?').map(Number).sort((a, b) => b - a);
+
+    configData = {
+      years: intYears,
+      counts: years,
+      totalAlumni: records.length,
+      lastUpdated: new Date().toISOString(),
+      dataStructure: {
+        fields: ['id', 'name', 'npm', 'graduationYear', 'thesis', 'supervisors', 'searchText'],
+        description: $('#cfgDescription').value || 'Data alumni Magister Teknik Elektro USK'
+      },
       cleaningInfo: {
-        cleanedBy: $('#mdCleanedBy').value || 'Auto-generated',
-        issuesFixed: $('#mdIssues').value.split('\n').filter(l => l.trim()),
+        cleanedBy: $('#cfgCleanedBy').value || 'Auto-generated',
+        issuesFixed: $('#cfgIssues').value.split('\n').filter(l => l.trim()),
         cleaningDate: new Date().toISOString().split('T')[0]
       },
-      graduationYears: Object.keys(years).filter(y => y !== '?').map(Number).sort(),
-      lastUpdated: new Date().toISOString(),
-      totalAlumni: records.length,
-      dataStructure: {
-        fields: ['id','name','npm','graduationYear','thesis','supervisors','searchText'],
-        description: $('#mdDescription').value || 'Data alumni Magister Teknik Elektro USK'
-      },
-      supervisors: metaSupervisors
+      supervisors: configSupervisors
     };
-    populateMetaForm();
-    toast('Metadata di-generate dari data', 'success');
+    populateConfigForm();
+    toast('Config di-generate dari data', 'success');
   }
 
-  function saveMetadata() {
-    syncMetaFromForm();
-    if (!metadataData) { toast('Tidak ada data', 'error'); return; }
-    download(JSON.stringify(metadataData, null, 2), 'alumni-metadata.json');
+  function syncRawFromForm() {
+    const yearsStr = $('#cfgYears').value.trim();
+    const years = yearsStr ? yearsStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
+
+    // Read counts from editor
+    const counts = {};
+    $$('#cfgCountsEditor input[data-count-year]').forEach(el => {
+      const y = el.dataset.countYear;
+      const v = parseInt(el.value) || 0;
+      if (v > 0) counts[y] = v;
+    });
+
+    configData = {
+      years,
+      counts,
+      totalAlumni: parseInt($('#cfgTotal').value) || 0,
+      lastUpdated: ($('#cfgLastUpdated').value || new Date().toISOString().split('T')[0]) + 'T00:00:00.000Z',
+      dataStructure: {
+        fields: ['id', 'name', 'npm', 'graduationYear', 'thesis', 'supervisors', 'searchText'],
+        description: $('#cfgDescription').value || ''
+      },
+      cleaningInfo: {
+        cleanedBy: $('#cfgCleanedBy').value || '',
+        issuesFixed: $('#cfgIssues').value.split('\n').filter(l => l.trim()),
+        cleaningDate: $('#cfgCleaningDate').value || ''
+      },
+      supervisors: configSupervisors
+    };
+    $('#cfgRaw').value = JSON.stringify(configData, null, 2);
+  }
+
+  function saveConfig() {
+    syncRawFromForm();
+    if (!configData) { toast('Tidak ada data', 'error'); return; }
+    download(JSON.stringify(configData, null, 2), 'alumni-metadata.json');
     toast('alumni-metadata.json di-download', 'success');
   }
 
-  function syncMetaFromForm() {
-    const yearsStr = $('#mdYears').value.trim();
-    const years = yearsStr ? yearsStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
-    metadataData = {
-      cleaningInfo: {
-        cleanedBy: $('#mdCleanedBy').value || '',
-        issuesFixed: $('#mdIssues').value.split('\n').filter(l => l.trim()),
-        cleaningDate: $('#mdCleaningDate').value || ''
-      },
-      graduationYears: years,
-      lastUpdated: ($('#mdLastUpdated').value || new Date().toISOString().split('T')[0]) + 'T00:00:00.000Z',
-      totalAlumni: parseInt($('#mdTotal').value) || 0,
-      dataStructure: {
-        fields: ['id','name','npm','graduationYear','thesis','supervisors','searchText'],
-        description: $('#mdDescription').value || ''
-      },
-      supervisors: metaSupervisors
-    };
-    $('#mdRaw').value = JSON.stringify(metadataData, null, 2);
+  function parseRawConfig() {
+    try {
+      configData = JSON.parse($('#cfgRaw').value);
+      configSupervisors = [...(configData.supervisors || [])];
+      populateConfigForm();
+      toast('Raw JSON parsed', 'success');
+    } catch { toast('JSON tidak valid', 'error'); }
   }
 
-  // Watch metadata form changes
-  ['mdTotal','mdLastUpdated','mdYears','mdCleanedBy','mdCleaningDate','mdDescription','mdIssues'].forEach(id => {
+  // Watch config form changes
+  ['cfgTotal', 'cfgLastUpdated', 'cfgYears', 'cfgCleanedBy', 'cfgCleaningDate', 'cfgDescription', 'cfgIssues'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener('change', syncMetaFromForm);
-      el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(syncMetaFromForm, 500); });
+      el.addEventListener('change', syncRawFromForm);
+      el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(syncRawFromForm, 500); });
     }
   });
 
-  // Watch raw metadata JSON
-  const mdRawEl = document.getElementById('mdRaw');
-  if (mdRawEl) mdRawEl.addEventListener('change', () => {
-    try {
-      metadataData = JSON.parse(mdRawEl.value);
-      metaSupervisors = [...(metadataData.supervisors || [])];
-      populateMetaForm();
-    } catch { toast('Raw JSON tidak valid', 'error'); }
-  });
-
-  // ═══ Config Drop Zone (auto-detect manifest/metadata) ═══
-  const cdz = document.getElementById('configDropZone');
+  // Config drop zone
+  const cdz = $('#configDropZone');
   if (cdz) {
     cdz.addEventListener('dragover', e => { e.preventDefault(); cdz.classList.add('drag-over'); });
     cdz.addEventListener('dragleave', () => cdz.classList.remove('drag-over'));
     cdz.addEventListener('drop', e => {
       e.preventDefault(); cdz.classList.remove('drag-over');
       const file = e.dataTransfer.files[0];
-      if (file) loadConfigFile(file);
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => { loadConfigJSON(ev.target.result); toast('Config dimuat', 'success'); };
+        reader.readAsText(file);
+      }
     });
     cdz.addEventListener('click', () => {
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = '.json';
-      inp.onchange = () => { if (inp.files[0]) loadConfigFile(inp.files[0]); };
+      inp.onchange = () => {
+        if (inp.files[0]) {
+          const reader = new FileReader();
+          reader.onload = ev => { loadConfigJSON(ev.target.result); toast('Config dimuat', 'success'); };
+          reader.readAsText(inp.files[0]);
+        }
+      };
       inp.click();
     });
   }
 
-  function loadConfigFile(file) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const text = e.target.result;
-      const name = file.name.toLowerCase();
-      let detected = null;
-
-      // Auto-detect by filename
-      if (name.includes('manifest')) detected = 'manifest';
-      else if (name.includes('metadata')) detected = 'metadata';
-
-      // Auto-detect by content if filename didn't match
-      if (!detected) {
-        try {
-          const obj = JSON.parse(text);
-          if (obj.years && obj.counts && 'total' in obj) detected = 'manifest';
-          else if (obj.cleaningInfo || obj.supervisors || obj.dataStructure) detected = 'metadata';
-        } catch {}
-      }
-
-      if (detected === 'manifest') {
-        loadManifestJSON(text);
-        toast('manifest.json terdeteksi & dimuat', 'success');
-      } else if (detected === 'metadata') {
-        loadMetadataJSON(text);
-        toast('alumni-metadata.json terdeteksi & dimuat', 'success');
-      } else {
-        // Try both
-        try {
-          const obj = JSON.parse(text);
-          if (obj.years) { loadManifestJSON(text); toast('Dimuat sebagai manifest', 'success'); }
-          else { loadMetadataJSON(text); toast('Dimuat sebagai metadata', 'success'); }
-        } catch { toast('JSON tidak valid', 'error'); }
-      }
-    };
-    reader.readAsText(file);
-  }
+  // ═══ Main drop zone (multi-file support) ═══
   const dz = $('#dropZone');
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
   dz.addEventListener('drop', e => {
     e.preventDefault(); dz.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) loadFile(file);
+    const files = e.dataTransfer.files;
+    for (const file of files) loadFile(file);
+    if (files.length > 1) toast(`${files.length} file di-import`, 'info');
   });
   dz.addEventListener('click', () => {
     const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = '.jsonl,.json,.csv';
-    inp.onchange = () => { if (inp.files[0]) loadFile(inp.files[0]); };
+    inp.type = 'file'; inp.accept = '.jsonl,.json,.csv'; inp.multiple = true;
+    inp.onchange = () => { for (const file of inp.files) loadFile(file); };
     inp.click();
   });
 
@@ -671,16 +835,17 @@
     edit, save, cancelEdit, remove, moveUp, moveDown,
     addRecord, filterTable, sortRecords,
     importGSheet, exportJSONL, exportCSV,
-    splitByYear, createTemplate,
-    loadManifestFile, saveManifest, autoGenerateManifest,
-    loadMetaFile, saveMetadata, autoGenerateMetadata,
+    splitByYear,
+    wizardSetYear, wizardParsePaste, wizardTemplate, wizardImportGSheet, wizardMerge,
+    autoGenerateConfig, saveConfig, parseRawConfig,
     addSupervisor, removeSupervisor,
   };
 
   // ═══ Init ═══
   renderTable();
+  initWizardDrop();
 
-  // Auto-update copyright year
+  // Auto-update copyright
   const el = document.getElementById('copyright-text');
   if (el) el.textContent = `\u00A9 ${new Date().getFullYear()} KingSyah`;
 })();
